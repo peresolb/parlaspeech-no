@@ -6,8 +6,6 @@ from typing import Dict, Set, List, Tuple
 
 from Levenshtein import ratio, editops, matching_blocks
 
-from utils.normalization import normalize
-
 
 @dataclass
 class Segment:
@@ -42,14 +40,21 @@ def load_segments(file: Path) -> List[Segment]:
     with open(file) as f:
         for l in f:
             data = json.loads(l)
-            ret.append(Segment(data['file'], data['start'], data['end'], data['text'].strip().split()))
+            ret.append(
+                Segment(
+                    data["file"],
+                    data["start"],
+                    data["end"],
+                    data["text"].strip().split(),
+                )
+            )
     return sorted(ret, key=lambda x: (x.file, x.start))
 
 
 @dataclass
 class Dictionary:
-    word2id: Dict[str, int] = field(default_factory=lambda: {'<unk>': 0})
-    id2word: Dict[int, str] = field(default_factory=lambda: {0: '<unk>'})
+    word2id: Dict[str, int] = field(default_factory=lambda: {"<unk>": 0})
+    id2word: Dict[int, str] = field(default_factory=lambda: {0: "<unk>"})
 
     def put(self, words: Set):
         for id, word in enumerate(sorted(list(words))):
@@ -67,7 +72,7 @@ class Dictionary:
         return self.id2word[id]
 
     def get_text(self, ids: List[int]) -> str:
-        return ' '.join([self.get_word(x) for x in ids])
+        return " ".join([self.get_word(x) for x in ids])
 
     def get_ids(self, text: str, warn_oov: bool = False) -> List[int]:
         return self.to_ids(text.strip().split(), warn_oov)
@@ -79,9 +84,9 @@ class Dictionary:
         return [self.get_word(x) for x in ids]
 
     def save(self, file: Path):
-        with open(file, 'w') as f:
+        with open(file, "w") as f:
             for id, word in self.id2word.items():
-                f.write(f'{id} {word}\n')
+                f.write(f"{id} {word}\n")
 
     def load(self, file: Path):
         self.word2id = {}
@@ -96,10 +101,10 @@ class Dictionary:
 
 
 class Matcher:
-    '''Matcher utility class
+    """Matcher utility class
 
     This class loads a large text corpus and allows matching short text segments to it.
-    '''
+    """
 
     def __init__(self, corpus: Path):
         lines = []
@@ -108,7 +113,7 @@ class Matcher:
         self.vocab = Dictionary()
         with open(corpus) as f:
             for l in f:
-                tok = normalize(l.strip())
+                tok = l.strip()
                 tok = tok.strip().split()
                 lines.append(tok)
                 words.update(tok)
@@ -143,7 +148,7 @@ class Matcher:
         max_r = 0
         pf = []
         for p in p1:
-            sm = SequenceMatcher(a=ids, b=self.corpus[p:p + N], autojunk=False)
+            sm = SequenceMatcher(a=ids, b=self.corpus[p : p + N], autojunk=False)
             r = sm.ratio()
             if r > max_r:
                 max_r = r
@@ -152,7 +157,7 @@ class Matcher:
                 pf.append(p)
 
         if len(pf) == 0:
-            print('ERROR: no candidates found!')
+            print("ERROR: no candidates found!")
             return 0, 0
         # elif len(pf) > 1:
         #     print('WARNING: multiple candidates found!')
@@ -162,7 +167,9 @@ class Matcher:
         # print('C  ' + self.vocab.get_text(self.corpus[pf:pf + N + 10]))
         # print('S  ' + self.vocab.get_text(ids))
 
-        mb = SequenceMatcher(a=ids, b=self.corpus[pf:pf + N + 10], autojunk=False).get_matching_blocks()
+        mb = SequenceMatcher(
+            a=ids, b=self.corpus[pf : pf + N + 10], autojunk=False
+        ).get_matching_blocks()
         # print(mb)
         m = mb[-2]
         M = m.b + m.size
@@ -170,7 +177,7 @@ class Matcher:
         return pf, pf + M
 
     def _ids2str(self, ids: List[int]) -> str:
-        return ''.join([chr(x) for x in ids])
+        return "".join([chr(x) for x in ids])
 
     def match(self, segments: List[Segment]) -> List[Position]:
         positions = []
@@ -181,7 +188,7 @@ class Matcher:
             N = len(segments[sit].text)
             if N >= 15:
                 break
-            print(f'Skipping {sit}\'th segment because too little words: {N}')
+            print(f"Skipping {sit}'th segment because too little words: {N}")
             positions.append(Position(-1, -1, -1, -1, 0, segments[sit]))
 
         # find position of first (non-trivial) segment
@@ -208,7 +215,7 @@ class Matcher:
             else:
                 L += 10
             # extract that portion of reference
-            tm = self.corpus[e:e + L]
+            tm = self.corpus[e : e + L]
 
             # match ASR segment to reference
             ops = editops(self._ids2str(tm), self._ids2str(segint))
@@ -246,20 +253,25 @@ class Matcher:
         return positions
 
     def print_debug(self, positions: List[Position]):
-        print(f'Printing {len(positions)} segments:')
-        print('==============')
+        print(f"Printing {len(positions)} segments:")
+        print("==============")
         for pos in positions:
-            words = self.vocab.to_words(self.corpus[pos.corp_start:pos.corp_end])
-            words = '\t'.join(words)
-            print('CORPUS\t' + words)
-            words = pos.segment.text[pos.seg_start:pos.seg_end]
-            words = '\t'.join(words)
-            print('SEGMENT\t' + words)
-            print(f'RATIO \t {pos.ratio}')
-            print('--------------')
+            words = self.vocab.to_words(self.corpus[pos.corp_start : pos.corp_end])
+            words = "\t".join(words)
+            print("CORPUS\t" + words)
+            words = pos.segment.text[pos.seg_start : pos.seg_end]
+            words = "\t".join(words)
+            print("SEGMENT\t" + words)
+            print(f"RATIO \t {pos.ratio}")
+            print("--------------")
 
-    def resegment_positions(self, positions: List[Position], max_time_gap: float = 5.0, max_word_gap: int = 10,
-                            max_seg_len: float = 20.0 * 60.0) -> List[Position]:
+    def resegment_positions(
+        self,
+        positions: List[Position],
+        max_time_gap: float = 5.0,
+        max_word_gap: int = 10,
+        max_seg_len: float = 20.0 * 60.0,
+    ) -> List[Position]:
         ret = []
         for pos in positions:
             if len(ret) == 0:
@@ -274,7 +286,11 @@ class Matcher:
             delta_ref = pos.corp_start - ls.corp_end
             # if the gap is between 0..5 seconds and 0..10 words and current length of segments is less than 20 mins
             # then merge segments
-            if 0 <= delta_time <= max_time_gap and 0 <= delta_ref <= max_word_gap and len_time < max_seg_len:
+            if (
+                0 <= delta_time <= max_time_gap
+                and 0 <= delta_ref <= max_word_gap
+                and len_time < max_seg_len
+            ):
                 ret[-1].segment.end = pos.segment.end
                 ret[-1].seg_end = pos.seg_end + len(ret[-1].segment.text)
                 ret[-1].segment.text.extend(pos.segment.text)
@@ -293,23 +309,28 @@ class Matcher:
 
         outdir.mkdir(exist_ok=True)
 
-        with open(outdir / 'wav.scp', 'w') as wav_f, \
-                open(outdir / 'segments', 'w') as seg_f, \
-                open(outdir / 'text', 'w') as text_f:
+        with open(outdir / "wav.scp", "w") as wav_f, open(
+            outdir / "segments", "w"
+        ) as seg_f, open(outdir / "text", "w") as text_f:
             for fn, (fid, segs) in enumerate(files.items()):
-                wav_f.write(f'reco{fn:03} {(wavdir / fid).absolute()}\n')
+                wav_f.write(f"reco{fn:03} {(wavdir / fid).absolute()}\n")
                 for sn, seg in enumerate(segs):
-                    seg_f.write(f'seg{fn:03}-{sn:04} reco{fn:03} {seg.segment.start} {seg.segment.end}\n')
+                    seg_f.write(
+                        f"seg{fn:03}-{sn:04} reco{fn:03} {seg.segment.start} {seg.segment.end}\n"
+                    )
                     text_f.write(
-                        f'seg{fn:03}-{sn:04} {self.vocab.get_text(self.corpus[seg.corp_start:seg.corp_end])}\n')
+                        f"seg{fn:03}-{sn:04} {self.vocab.get_text(self.corpus[seg.corp_start:seg.corp_end])}\n"
+                    )
 
 
-def ctm_to_segments(wavscp: Path, ctm: Path, max_gap: float = 1.0, max_len: float = 20.0) -> List[Segment]:
+def ctm_to_segments(
+    wavscp: Path, ctm: Path, max_gap: float = 1.0, max_len: float = 20.0
+) -> List[Segment]:
     scp = {}
     with open(wavscp) as f:
         for l in f:
             tok = l.strip().split()
-            scp[tok[0]] = ' '.join(tok[1:])
+            scp[tok[0]] = " ".join(tok[1:])
 
     words = {}
     with open(ctm) as f:
